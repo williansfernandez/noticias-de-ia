@@ -4,102 +4,135 @@ document.addEventListener('DOMContentLoaded', () => {
     const commentsList = document.getElementById('comments-list');
     const commentWarning = document.getElementById('comment-warning');
 
-    // Function to analyze the comment for offensive language (Enhanced)
-    function isCommentOffensive(comment) {
-        const lowerCaseComment = comment.toLowerCase().trim();
+// Function to analyze the comment for offensive language (Advanced Scoring System)
+function isCommentOffensive(comment) {
+    const lowerCaseComment = comment.toLowerCase().trim();
+    if (!lowerCaseComment) return false; // Empty comments are not offensive
 
-        // Expanded lists for better accuracy
-        const sensitiveWords = [
-            "negro", "mierda", "puta", "cabrón", "gilipollas", "joder", "marica", "zorra",
-            "subnormal", "retrasado", "maldito", "bastardo", "imbécil", "estúpido", "idiota",
-            "pendejo", "culero", "chinga", "pinche", "puto" // Added more Spanish offensive terms
-        ];
-        const offensivePatterns = [
-            "negro de mierda", "negra de mierda", "puta madre", "hijo de puta", "hija de puta",
-            "me cago en tu puta madre", "cabrón de mierda", "negro bruto", "negra bruta",
-            "marica de mierda", "maldito seas", "pinche pendejo", "vete a la mierda",
-            "chupa pollas", "come mierda" // Added more varied offensive patterns
-        ];
-        // Benign contexts help avoid flagging harmless uses of sensitive words.
-        // Order matters less here, focusing on co-occurrence.
-        const benignContexts = [
-            "televisor", "coche", "humor", "libro", "gato", "perro", "color", "ropa",
-            "arte", "película", "canción", "objeto", "pintura", "comida", "chiste", "broma"
-            // Added more general terms
-        ];
-        const negationWords = ["no", "nunca", "jamás", "tampoco", "para nada", "de ninguna manera"];
+    let toxicityScore = 0;
+    const TOXICITY_THRESHOLD = 10; // Umbral para considerar un comentario como tóxico
 
-        // 1. Check for direct offensive patterns (high priority)
-        for (const pattern of offensivePatterns) {
-            if (lowerCaseComment.includes(pattern)) {
-                console.log("Offensive pattern found:", pattern);
-                return true;
+    // --- Definición de Listas y Pesos ---
+    // Estos patrones/palabras suman directamente a la puntuación global
+    const directScoreTerms = {
+        // Alta Toxicidad (superan el umbral por sí solos o casi)
+        "negro de mierda": 15, "negra de mierda": 15, "hijo de puta": 15, "hija de puta": 15,
+        "me cago en tu puta madre": 15, "cabrón de mierda": 15, "marica de mierda": 15,
+        "pinche pendejo": 12, "chinga tu madre": 15, "puto asco": 10,
+        // Media-Alta Toxicidad (contribuyen significativamente)
+        "mierda": 7, "puta": 7, "joder": 6, "cabrón": 7, "zorra": 7, "subnormal": 8,
+        "retrasado": 8, "maldito": 6, "bastardo": 7, "imbécil": 6, "estúpido": 6,
+        "idiota": 6, "pendejo": 6, "culero": 7, "pinche": 5, "puto": 7, // 'puto' como adjetivo o insulto
+        // Baja Toxicidad (suman, pero necesitan acumulación o intensificadores)
+        "tonto": 3, "feo": 3, "asco": 4, "odio": 4, "fastidio": 3, "molesto": 3
+    };
+
+    // Intensificadores: multiplican la puntuación del término tóxico al que afectan
+    const intensifiers = {
+        "muy": 1.5, "mucho":1.5, "demasiado": 1.7, "extremadamente": 2.0, "terriblemente": 1.8,
+        "jodidamente": 2.0, "putamente": 2.0, "bastante": 1.3, "super": 1.5, "mega": 1.6,
+        "un montón de": 1.5 // ej. "un montón de mierda"
+    };
+
+    // Mitigadores: reducen la puntuación del término tóxico al que afectan
+    const mitigators = {
+        "poco": 0.5, "un poco": 0.5, "algo": 0.7, "quizás": 0.6, "tal vez": 0.6,
+        "relativamente": 0.7, "no tan": 0.4, "no mucho": 0.4
+    };
+
+    // Palabras de negación: pueden anular la puntuación de un término si están directamente asociadas
+    const negationWords = ["no", "ni", "nunca", "jamás", "tampoco", "para nada", "de ninguna manera"];
+
+    // Contextos benignos: si un término tóxico aparece en estos contextos, su puntuación se reduce/anula
+    // La clave es el término de contexto, el valor es un factor de reducción (0 anula)
+    const benignContextFactors = {
+        "humor": 0.1, "chiste": 0.1, "broma": 0.1, // ej. "humor negro"
+        "color": 0.0, "televisor": 0.0, "coche": 0.0, "ropa": 0.0, "libro": 0.0,
+        "arte": 0.0, "pintura": 0.0, "película": 0.2, "canción": 0.2, "personaje": 0.2, // ej. "personaje dice X"
+        "no es": 0.0, "no era": 0.0, "no soy": 0.0, "no eres": 0.0, // Negación directa de identidad
+        "contexto histórico": 0.1, "cita de": 0.1
+    };
+
+    // --- Lógica de Análisis ---
+
+    // 1. Tokenización simple (puede no ser ideal para frases complejas, pero es un inicio)
+    // Para una mejor detección de frases, iteraremos sobre el string original buscando substrings.
+
+    let processedComment = lowerCaseComment;
+
+    // Aplicar puntuación de términos directos
+    for (const term in directScoreTerms) {
+        let termOccurrences = 0;
+        let searchStartIndex = 0;
+        while(processedComment.indexOf(term, searchStartIndex) !== -1) {
+            const termIndex = processedComment.indexOf(term, searchStartIndex);
+            termOccurrences++;
+            searchStartIndex = termIndex + term.length; // Continuar búsqueda después del término encontrado
+
+            let currentScore = directScoreTerms[term];
+            let modifierFactor = 1.0;
+            let isNegatedOrBenign = false;
+
+            // a. Verificar negación simple (ej. "no [término]")
+            // Busca la negación justo antes del término.
+            const textBeforeTerm = processedComment.substring(Math.max(0, termIndex - 10), termIndex).trim(); // 10 chars antes
+            for (const neg of negationWords) {
+                if (textBeforeTerm.endsWith(neg)) {
+                    modifierFactor = 0.1; // Reduce drásticamente la puntuación
+                    isNegatedOrBenign = true;
+                    console.log(`Term '${term}' found with negation '${neg}'. Factor: ${modifierFactor}`);
+                    break;
+                }
             }
-        }
 
-        // 2. Check for sensitive words, considering negations and benign contexts
-        for (const word of sensitiveWords) {
-            if (lowerCaseComment.includes(word)) {
-                // a. Check for negations immediately around the sensitive word
-                // Example: "no es negro ofensivo", "él no es un cabrón"
-                let isNegated = false;
-                for (const negation of negationWords) {
-                    if (lowerCaseComment.includes(negation + " " + word) ||
-                        lowerCaseComment.includes(negation + " es " + word) || // e.g. no es [palabra]
-                        lowerCaseComment.includes(word + " " + negation)) { // less common but possible
-                        // Further check: ensure the negation isn't part of a larger offensive phrase that bypasses pattern matching
-                        // This is tricky; for now, a simple negation check might suffice for basic cases.
-                        // A more advanced system would parse sentence structure.
-                        console.log("Sensitive word '"+word+"' found with negation '"+negation+"'. Potentially not offensive here.");
-                        isNegated = true;
+            // b. Verificar contexto benigno (ej. "humor [término]", "[término] de color")
+            // Busca palabras de contexto benigno alrededor del término.
+            if (!isNegatedOrBenign) {
+                const windowSize = 20; // Caracteres alrededor del término
+                const textAroundTerm = processedComment.substring(Math.max(0, termIndex - windowSize), Math.min(processedComment.length, termIndex + term.length + windowSize));
+                for (const context in benignContextFactors) {
+                    if (textAroundTerm.includes(context)) {
+                         // Si el contexto es parte del término ofensivo en sí, no lo consideramos benigno
+                        if (term.includes(context)) continue;
+                        modifierFactor = benignContextFactors[context];
+                        isNegatedOrBenign = true;
+                        console.log(`Term '${term}' found with benign context '${context}'. Factor: ${modifierFactor}`);
                         break;
                     }
                 }
-                if (isNegated) {
-                    // If negated, assume it's not offensive in this specific instance.
-                    // This is a heuristic. "No es un cabrón, es un santo" vs "No, es un cabrón". Context is hard.
-                    // For now, if negated, we'll lean towards it being non-offensive *for this specific word occurrence*.
-                    // The comment might still be offensive due to other words/patterns.
-                    continue; // Move to the next sensitive word check
-                }
+            }
 
-                // b. Check if the sensitive word is part of a benign context
-                // We look for the benign word anywhere in the comment for simplicity,
-                // assuming its presence *might* indicate a non-offensive context for the sensitive word.
-                // A more advanced check would look at proximity.
-                let inBenignContext = false;
-                for (const contextItem of benignContexts) {
-                    if (lowerCaseComment.includes(contextItem)) {
-                        // Check if the context word is reasonably close or in a phrase with the sensitive word
-                        // This is a simplified proximity check.
-                        const wordIndex = lowerCaseComment.indexOf(word);
-                        const contextIndex = lowerCaseComment.indexOf(contextItem);
-                        // Check if context word is within a certain window (e.g., 2-3 words)
-                        // or if the comment is short, making co-occurrence more significant.
-                        if (Math.abs(wordIndex - contextIndex) < 20 || lowerCaseComment.length < 30) {
-                           console.log("Sensitive word '"+word+"' found with benign context item '"+contextItem+"'.");
-                           inBenignContext = true;
-                           break;
-                        }
-                    }
-                }
+            currentScore *= modifierFactor; // Aplicar factor de negación/contexto benigno
 
-                if (inBenignContext) {
-                    // If in a benign context, this specific sensitive word might be okay.
-                    // Continue checking other parts of the comment.
-                    // This doesn't mean the whole comment is fine, just this instance of the word.
-                    continue;
-                }
+            // c. Aplicar intensificadores/mitigadores
+            // Busca intensificadores/mitigadores justo antes del término.
+            // Esta es una lógica simplificada; idealmente se analizaría la estructura de la frase.
+            if (modifierFactor > 0.1) { // No aplicar si ya está fuertemente mitigado/negado
+                const wordsBefore = textBeforeTerm.split(/\s+/);
+                const wordImmediatelyBefore = wordsBefore.pop(); // Última palabra antes del término
 
-                // c. If sensitive word is found, not negated, and not in a clear benign context, flag as offensive.
-                console.log("Sensitive word found without clear benign context or negation:", word);
+                if (intensifiers[wordImmediatelyBefore]) {
+                    currentScore *= intensifiers[wordImmediatelyBefore];
+                    console.log(`Intensifier '${wordImmediatelyBefore}' applied to '${term}'. New score contrib: ${currentScore - (directScoreTerms[term] * modifierFactor)}`);
+                } else if (mitigators[wordImmediatelyBefore]) {
+                    currentScore *= mitigators[wordImmediatelyBefore];
+                    console.log(`Mitigator '${wordImmediatelyBefore}' applied to '${term}'. New score contrib: ${currentScore - (directScoreTerms[term] * modifierFactor)}`);
+                }
+            }
+
+            toxicityScore += currentScore;
+            console.log(`Term: '${term}', Base: ${directScoreTerms[term]}, Modified Score Added: ${currentScore.toFixed(2)}, Total Score: ${toxicityScore.toFixed(2)}`);
+
+            if (toxicityScore >= TOXICITY_THRESHOLD) {
+                console.log(`Threshold (${TOXICITY_THRESHOLD}) reached. Comment is offensive.`);
                 return true;
             }
         }
-
-        // 3. If no offensive patterns or uncontextualized/non-negated sensitive words are found
-        return false;
     }
+
+    console.log(`Final Toxicity Score: ${toxicityScore.toFixed(2)} (Threshold: ${TOXICITY_THRESHOLD})`);
+    return toxicityScore >= TOXICITY_THRESHOLD;
+}
 
     // Function to display a new comment in the list
     function displayComment(comment) {
