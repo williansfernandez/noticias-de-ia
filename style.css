@@ -1,0 +1,129 @@
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+header {
+    background: #333;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0;
+}
+
+main {
+    width: 80%;
+    margin: 20px auto;
+    overflow: auto;
+    padding: 20px;
+    background: #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+article h2 {
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+#comment-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+#comment-section h3, #comment-section h4 {
+    color: #333;
+}
+
+#comments-list .comment-item {
+    display: flex;
+    padding: 10px;
+    border-bottom: 1px dotted #ddd;
+    margin-bottom: 10px;
+    background-color: #f9f9f9;
+}
+
+.comment-avatar {
+    flex: 0 0 40px; /* Do not grow, do not shrink, basis 40px */
+    height: 40px;
+    background-color: #007bff;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    margin-right: 15px;
+    font-weight: bold;
+}
+
+.comment-content {
+    flex-grow: 1;
+}
+
+.comment-author {
+    font-weight: bold;
+    margin: 0 0 5px 0;
+    color: #0056b3;
+}
+
+.comment-content p {
+    margin: 0;
+}
+
+.comment-input {
+    margin-top: 20px;
+}
+
+#comment-text {
+    width: calc(100% - 22px); /* Adjust for padding and border */
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+
+#submit-comment {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#submit-comment:hover {
+    background: #0056b3;
+}
+
+.warning {
+    background-color: #ffdddd;
+    border: 1px solid #f44336;
+    color: #f44336;
+    padding: 15px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+}
+
+.warning p {
+    margin: 0;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    background: #333;
+    color: #fff;
+    margin-top: 30px;
+}
