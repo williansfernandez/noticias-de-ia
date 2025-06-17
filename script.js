@@ -4,60 +4,101 @@ document.addEventListener('DOMContentLoaded', () => {
     const commentsList = document.getElementById('comments-list');
     const commentWarning = document.getElementById('comment-warning');
 
-    // Function to analyze the comment for offensive language
+    // Function to analyze the comment for offensive language (Enhanced)
     function isCommentOffensive(comment) {
-        const lowerCaseComment = comment.toLowerCase();
+        const lowerCaseComment = comment.toLowerCase().trim();
 
-        // Lists of sensitive words and offensive patterns
-        // These can be expanded and refined
-        const sensitiveWords = ["negro", "mierda", "puta", "cabrón", "gilipollas", "joder"];
+        // Expanded lists for better accuracy
+        const sensitiveWords = [
+            "negro", "mierda", "puta", "cabrón", "gilipollas", "joder", "marica", "zorra",
+            "subnormal", "retrasado", "maldito", "bastardo", "imbécil", "estúpido", "idiota",
+            "pendejo", "culero", "chinga", "pinche", "puto" // Added more Spanish offensive terms
+        ];
         const offensivePatterns = [
-            "negro de mierda",
-            "puta madre",
-            "me cago en tu puta madre",
-            "cabrón de mierda",
-            "negro bruto" // As per the issue description
+            "negro de mierda", "negra de mierda", "puta madre", "hijo de puta", "hija de puta",
+            "me cago en tu puta madre", "cabrón de mierda", "negro bruto", "negra bruta",
+            "marica de mierda", "maldito seas", "pinche pendejo", "vete a la mierda",
+            "chupa pollas", "come mierda" // Added more varied offensive patterns
         ];
-        const benignContexts = [ // Words that might make a sensitive word benign
-            "televisor", "coche", "humor", "libro", "gato", "perro", "color"
+        // Benign contexts help avoid flagging harmless uses of sensitive words.
+        // Order matters less here, focusing on co-occurrence.
+        const benignContexts = [
+            "televisor", "coche", "humor", "libro", "gato", "perro", "color", "ropa",
+            "arte", "película", "canción", "objeto", "pintura", "comida", "chiste", "broma"
+            // Added more general terms
         ];
+        const negationWords = ["no", "nunca", "jamás", "tampoco", "para nada", "de ninguna manera"];
 
-
-        // 1. Check for direct offensive patterns
+        // 1. Check for direct offensive patterns (high priority)
         for (const pattern of offensivePatterns) {
             if (lowerCaseComment.includes(pattern)) {
                 console.log("Offensive pattern found:", pattern);
-                return true; // Offensive if a direct pattern is matched
+                return true;
             }
         }
 
-        // 2. Check for sensitive words and try to determine context
+        // 2. Check for sensitive words, considering negations and benign contexts
         for (const word of sensitiveWords) {
             if (lowerCaseComment.includes(word)) {
-                // Check if the sensitive word is part of a benign context
-                let isBenign = false;
-                for (const context of benignContexts) {
-                    // Example: "televisor negro" or "negro televisor"
-                    if (lowerCaseComment.includes(context + " " + word) || lowerCaseComment.includes(word + " " + context)) {
-                        isBenign = true;
+                // a. Check for negations immediately around the sensitive word
+                // Example: "no es negro ofensivo", "él no es un cabrón"
+                let isNegated = false;
+                for (const negation of negationWords) {
+                    if (lowerCaseComment.includes(negation + " " + word) ||
+                        lowerCaseComment.includes(negation + " es " + word) || // e.g. no es [palabra]
+                        lowerCaseComment.includes(word + " " + negation)) { // less common but possible
+                        // Further check: ensure the negation isn't part of a larger offensive phrase that bypasses pattern matching
+                        // This is tricky; for now, a simple negation check might suffice for basic cases.
+                        // A more advanced system would parse sentence structure.
+                        console.log("Sensitive word '"+word+"' found with negation '"+negation+"'. Potentially not offensive here.");
+                        isNegated = true;
                         break;
                     }
                 }
-                if (lowerCaseComment.includes("humor " + word)){ // e.g. humor negro
-                    isBenign = true;
+                if (isNegated) {
+                    // If negated, assume it's not offensive in this specific instance.
+                    // This is a heuristic. "No es un cabrón, es un santo" vs "No, es un cabrón". Context is hard.
+                    // For now, if negated, we'll lean towards it being non-offensive *for this specific word occurrence*.
+                    // The comment might still be offensive due to other words/patterns.
+                    continue; // Move to the next sensitive word check
                 }
 
-
-                if (!isBenign) {
-                    // If the sensitive word is found and not in a recognized benign context, flag as offensive.
-                    // This is a simplification. True contextual analysis is much more complex.
-                    console.log("Sensitive word found without clear benign context:", word);
-                    return true;
+                // b. Check if the sensitive word is part of a benign context
+                // We look for the benign word anywhere in the comment for simplicity,
+                // assuming its presence *might* indicate a non-offensive context for the sensitive word.
+                // A more advanced check would look at proximity.
+                let inBenignContext = false;
+                for (const contextItem of benignContexts) {
+                    if (lowerCaseComment.includes(contextItem)) {
+                        // Check if the context word is reasonably close or in a phrase with the sensitive word
+                        // This is a simplified proximity check.
+                        const wordIndex = lowerCaseComment.indexOf(word);
+                        const contextIndex = lowerCaseComment.indexOf(contextItem);
+                        // Check if context word is within a certain window (e.g., 2-3 words)
+                        // or if the comment is short, making co-occurrence more significant.
+                        if (Math.abs(wordIndex - contextIndex) < 20 || lowerCaseComment.length < 30) {
+                           console.log("Sensitive word '"+word+"' found with benign context item '"+contextItem+"'.");
+                           inBenignContext = true;
+                           break;
+                        }
+                    }
                 }
+
+                if (inBenignContext) {
+                    // If in a benign context, this specific sensitive word might be okay.
+                    // Continue checking other parts of the comment.
+                    // This doesn't mean the whole comment is fine, just this instance of the word.
+                    continue;
+                }
+
+                // c. If sensitive word is found, not negated, and not in a clear benign context, flag as offensive.
+                console.log("Sensitive word found without clear benign context or negation:", word);
+                return true;
             }
         }
 
-        return false; // Not offensive if no patterns or uncontextualized sensitive words are found
+        // 3. If no offensive patterns or uncontextualized/non-negated sensitive words are found
+        return false;
     }
 
     // Function to display a new comment in the list
